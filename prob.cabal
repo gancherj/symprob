@@ -22,5 +22,6 @@ executable prob
                        free,
                        containers,
                        probability
+  other-modules:       Crypto.Dist
 
-  extensions: GADTs, DeriveFunctor, ScopedTypeVariables
+  default-extensions: GADTs, DeriveFunctor, ScopedTypeVariables
