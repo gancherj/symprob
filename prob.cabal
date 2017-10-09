@@ -21,7 +21,9 @@ executable prob
                        sbv,
                        free,
                        containers,
-                       probability
-  other-modules:       Crypto.Dist
+                       probability,
+                       mtl
 
-  default-extensions: GADTs, DeriveFunctor, ScopedTypeVariables
+  other-modules:       Crypto.Dist, Crypto.Prot, Crypto.Util
+
+  default-extensions: GADTs, DeriveFunctor, ScopedTypeVariables, TemplateHaskell, StandaloneDeriving, DeriveDataTypeable, DeriveAnyClass
