@@ -32,10 +32,6 @@ guessProb dA dB =
                 y <- db
                 return (x,y)
 
-constrainProb :: [SReal] -> Symbolic ()
-constrainProb rs = do
-    forM rs (\r -> do {constrain $ r .>= 0; constrain $ r .<= 1})
-    constrain $ (sum rs) .== 1
 
 trans :: Dist SWord8 -> Dist SWord8
 trans d = 

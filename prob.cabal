@@ -26,4 +26,4 @@ executable prob
 
   other-modules:       Crypto.Dist, Crypto.Prot, Crypto.Util
 
-  default-extensions: GADTs, DeriveFunctor, ScopedTypeVariables, TemplateHaskell, StandaloneDeriving, DeriveDataTypeable, DeriveAnyClass
+  default-extensions: GADTs, DeriveFunctor, ScopedTypeVariables, TemplateHaskell, StandaloneDeriving, DeriveDataTypeable, DeriveAnyClass, FlexibleInstances

@@ -75,5 +75,5 @@ runHonest i1 i2 = do
     return m
 
 thmOk :: SBool -> SBool -> SBool
-thmOk i1 i2 = let x = (msgOutput (i1 <+> i2)) .??= (runHonest i1 i2) in x .== 1
+thmOk i1 i2 = ((msgOutput (i1 <+> i2)) .??= (runHonest i1 i2)) .== 1
 
