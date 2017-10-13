@@ -31,7 +31,7 @@ genAdv bound = do
     reactions <- genReactions bound
     let pairs = zip (map (sFromIntegral . literal) [0..(bound - 1)]) reactions
         reax (i :: SWord8) inp = map (\(j, reac) -> (i .== j, do { m <- reac inp; return (m, i+1) } )) pairs
-    return $ \(m, i) -> symSwitch (reax i m) ((snd . head) (reax i m))
+    return $ \(m, i) -> symSwitch (reax i m) (error "hello darkness my old friend")
 
 equalParties :: Party Msg SWord8 -> Party Msg SWord8 -> SBool
 equalParties p1 p2 =
@@ -208,13 +208,12 @@ simulatorRightIncorrect adv ((m0, m1), (advs, i, o)) =
 
 
 
-rpsSecure :: SBool -> Symbolic SBool
-rpsSecure i = do
-    a <- genAdv 4
-    let adv = instNullState false a
-    return $ seqDist
-        (runReal 0 (0, false) (honestPartyLeftReal i) adv)
-        (runIdeal 0 ((0, false), 0, false) (honestPartyLeftIdeal i) (simulatorRightIncorrect adv))
+rpsSecure :: SBool -> SBool -> Symbolic SBool
+rpsSecure i i2 = do
+    a <- genAdv 3
+    let d1 = (runReal 0 (0, false) a (honestPartyRightReal i2))
+        d2 = (runIdeal 0 0 (honestPartyLeftIdeal i) (honestPartyRightIdeal i2))
+    return $ seqDist d1 d2
 
 
                 

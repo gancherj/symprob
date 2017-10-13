@@ -3,6 +3,7 @@ import Control.Monad
 import Data.SBV
 import qualified Crypto.Prot as Prot
 import qualified Crypto.Dist as Dist
+import qualified Numeric.Probability.Distribution as Dist
 
 
 testDist :: (SBool -> Dist.Dist SBool) -> (SBool -> Dist.Dist SBool) -> Dist.Dist SBool
@@ -36,11 +37,17 @@ t2 = do
     a <- Prot.genAdv 2
     return $ Prot.equalParties a (Prot.honestPartyRightIdeal true)
 
+
+
 main = do
-    -- putStrLn . show =<< prove Prot.honestIdealCorrect
-    -- putStrLn . show =<< prove Prot.honestRealCorrect
+    putStrLn . show =<< prove Prot.honestIdealCorrect
+    putStrLn . show =<< prove Prot.honestRealCorrect
 
     putStrLn "prove:"
-    putStrLn . show =<< sat (\x -> do
-        y <- Prot.rpsSecure x
-        return (bnot y)) 
+    putStrLn . show =<< prove Prot.rpsSecure
+
+    putStrLn "sat:"
+    res <- sat Prot.rpsSecure
+    putStrLn $ show res
+
+    putStrLn . show =<< prove (Dist.seqDist (Dist.certainly (false :: SBool)) (Dist.uniform [false, true]))

@@ -32,6 +32,8 @@ instance Floating AlgReal where
 seqDist :: (EqSymbolic a, Enumerable a, Mergeable a) => Dist a -> Dist a -> SBool
 seqDist d1 d2 = foldl (\acc a -> acc &&& ((a .??= d1) .== (a .??= d2))) true enumerate
 
+ppDist :: Show a => Dist a -> String
+ppDist d = show $ D.decons d
 
 genSymDist :: Enumerable a => Symbolic (Dist a)
 genSymDist = do
@@ -40,14 +42,13 @@ genSymDist = do
     constrainProb rs
     return $ D.Cons $ zip as rs
 
-
-
+-- TODO this is failing, causing my code to fuck up
 genReaction :: (EqSymbolic a, Enumerable a, Mergeable b, Enumerable b) => Symbolic (a -> Dist b)
 genReaction = do
     dists <- forM as (\a -> genSymDist)
     let pairs = zip as dists
         tests x = map (\(a,b) -> (x .== a, b)) pairs
-    return $ \(x :: a) -> symSwitch (tests x) (head dists) 
+    return $ \(x :: a) -> symSwitch (tests x) (error "hello darkness my old friend") 
         where
             as = enumerate
 
