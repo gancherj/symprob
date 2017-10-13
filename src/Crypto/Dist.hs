@@ -28,8 +28,10 @@ constrainProb rs = do
 
 instance Floating AlgReal where 
 
-class Enumerable a where
-    enumerate :: [a]
+
+seqDist :: (EqSymbolic a, Enumerable a, Mergeable a) => Dist a -> Dist a -> SBool
+seqDist d1 d2 = foldl (\acc a -> acc &&& ((a .??= d1) .== (a .??= d2))) true enumerate
+
 
 genSymDist :: Enumerable a => Symbolic (Dist a)
 genSymDist = do
@@ -48,6 +50,9 @@ genReaction = do
     return $ \(x :: a) -> symSwitch (tests x) (head dists) 
         where
             as = enumerate
+
+genReactions :: (EqSymbolic a, Enumerable a, Mergeable b, Enumerable b) => Integer -> Symbolic [a -> Dist b]
+genReactions i = mapM (\_ -> genReaction) [1..i]
 
 instance Mergeable a => Mergeable (D.T Probability a) where
     symbolicMerge w s (D.Cons a) (D.Cons b) = D.Cons $ symbolicMerge w s a b
