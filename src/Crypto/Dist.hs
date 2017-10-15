@@ -40,20 +40,28 @@ genSymDist = do
     let as = enumerate
     rs <- forM as (\a -> (free_ :: Symbolic SReal))
     constrainProb rs
-    return $ D.Cons $ zip as rs
+    return $ D.fromFreqs $ zip as rs
 
--- TODO this is failing, causing my code to fuck up
-genReaction :: (EqSymbolic a, Enumerable a, Mergeable b, Enumerable b) => Symbolic (a -> Dist b)
+genReaction :: (Show a, EqSymbolic a, Enumerable a, Mergeable b, Enumerable b) => Symbolic (a -> Dist b)
 genReaction = do
     dists <- forM as (\a -> genSymDist)
     let pairs = zip as dists
         tests x = map (\(a,b) -> (x .== a, b)) pairs
-    return $ \(x :: a) -> symSwitch (tests x) (error "hello darkness my old friend") 
+    return $ \(x :: a) -> symSwitch (tests x) (error $ "bad switch: " ++ show x)
         where
             as = enumerate
 
-genReactions :: (EqSymbolic a, Enumerable a, Mergeable b, Enumerable b) => Integer -> Symbolic [a -> Dist b]
-genReactions i = mapM (\_ -> genReaction) [1..i]
+genReaction2 :: (Show a, EqSymbolic a, Enumerable a, Mergeable b, Enumerable b) => Symbolic (a -> Dist b)
+genReaction2 = do
+    dists <- forM as (\a -> genSymDist)
+    let pairs = zip as dists
+        tests x = map (\(a,b) -> (x .== a, b)) pairs
+    return $ \(x :: a) -> symSwitch (init (tests x)) (snd (last (tests x)))
+        where
+            as = enumerate
+
+genReactions :: (Show a, EqSymbolic a, Enumerable a, Mergeable b, Enumerable b) => Integer -> Symbolic [a -> Dist b]
+genReactions i = mapM (\_ -> genReaction2) [1..i]
 
 instance Mergeable a => Mergeable (D.T Probability a) where
     symbolicMerge w s (D.Cons a) (D.Cons b) = D.Cons $ symbolicMerge w s a b

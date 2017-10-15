@@ -8,17 +8,19 @@ tr s a = (unsafePerformIO (putStrLn s)) `seq` a
 symSwitch :: Mergeable a => [(SBool, a)] -> a -> a
 symSwitch [] def = def 
 symSwitch ((cond, a) : conds) def =
-    iteLazy cond a (symSwitch conds def)
+    ite cond a (symSwitch conds def)
 
 
 class Enumerable a where
     enumerate :: [a]
 
 instance (SymWord a, Enumerable a) => Enumerable (SBV a) where
-    enumerate = map (\x -> literal x) enumerate
+    enumerate = [literal a | a <- enumerate]
+
+
 
 instance (Enumerable a, Enumerable b) => Enumerable (a,b) where
-    enumerate = zip enumerate enumerate
+    enumerate = [(a,b) | a <- enumerate, b <- enumerate]
 
 instance Enumerable () where
     enumerate = [()]

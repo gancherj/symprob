@@ -40,14 +40,22 @@ t2 = do
 
 
 main = do
+    {-putStrLn . show =<< prove ( do
+        x <- tst
+        return $ x .== 1)
+
+
     putStrLn . show =<< prove Prot.honestIdealCorrect
     putStrLn . show =<< prove Prot.honestRealCorrect
+    -}
 
     putStrLn "prove:"
     putStrLn . show =<< prove Prot.rpsSecure
 
     putStrLn "sat:"
-    res <- sat Prot.rpsSecure
+    res <- sat t2
     putStrLn $ show res
-
+    {-
     putStrLn . show =<< prove (Dist.seqDist (Dist.certainly (false :: SBool)) (Dist.uniform [false, true]))
+    -}
+

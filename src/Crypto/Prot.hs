@@ -12,8 +12,8 @@ type Party m s = (m,s) -> Dist (m,s)
 
 instNullState :: s -> Party m (SWord8) -> Party m (SWord8, s)
 instNullState snil f = \(m,(s0, s1)) -> do
-    (m', _) <- f (m, s0)
-    return (m', (s0 + 1, snil))
+    (m', a) <- f (m, s0)
+    return (m', (a + 1, snil))
 
 data ProtMsg = Play | Open | Ok | Result | Output | Err | Opened
 mkSymbolicEnumeration ''ProtMsg
@@ -28,10 +28,10 @@ type Msg = (SProtMsg, SBool)
 
 genAdv :: Integer -> Symbolic (Party Msg SWord8) 
 genAdv bound = do
-    reactions <- genReactions bound
+    reactions <- genReactions bound 
     let pairs = zip (map (sFromIntegral . literal) [0..(bound - 1)]) reactions
         reax (i :: SWord8) inp = map (\(j, reac) -> (i .== j, do { m <- reac inp; return (m, i+1) } )) pairs
-    return $ \(m, i) -> symSwitch (reax i m) (error "hello darkness my old friend")
+    return $ \(m, i) -> symSwitch (init (reax i m)) (snd (last (reax i m)))
 
 equalParties :: Party Msg SWord8 -> Party Msg SWord8 -> SBool
 equalParties p1 p2 =
@@ -170,6 +170,27 @@ simulatorRight :: Party Msg (SWord8, SBool) -> Party Msg ((SWord8, SBool), SWord
 simulatorRight adv ((m0, m1), (advs, i, o)) = 
     symSwitch [
         (i .== 0 &&& (m0 .== literal Ok), do
+            ((advm0, advm1), advs') <- adv (msgOk, (0, false))
+            symSwitch [
+                (advm0 .== literal Play, Dist.certainly $ (msgPlay advm1, (advs', i + 1, advm1)))]
+                (Dist.certainly $ (msgErr, (advs', i + 1, o)))),
+        (i .== 1 &&& (m0 .== literal Result), do
+            ((advm0, advm1), advs') <- adv ((msgOpened (o <+> m1)), advs) 
+            symSwitch [
+                ((advm0, advm1) .== msgOpen, do
+                    ((advm0, advm1), _) <- adv (msgOk, advs')
+                    return $ ((advm0, advm1), (advs', i + 1, o)))
+                    --symSwitch [
+                    --    ((advm0 .== literal Output), Dist.certainly $ (msgOutput advm1, (advs', 2, o)))]
+                    --    (Dist.certainly $ (msgErr, (advs, 2, o))))
+                ]
+                (Dist.certainly $ (msgErr, (advs', i + 1, o))))]
+        (Dist.certainly $ (msgErr, (advs, i + 1, o)))
+
+simulatorRightIncorrect :: Party Msg (SWord8, SBool) -> Party Msg ((SWord8, SBool), SWord8, SBool)
+simulatorRightIncorrect adv ((m0, m1), (advs, i, o)) = 
+    symSwitch [
+        (i .== 0 &&& (m0 .== literal Ok), do
             ((advm0, advm1), advs) <- adv (msgOk, (0, false))
             return $ symSwitch [
                 (advm0 .== literal Play, (msgPlay advm1, (advs, 1, advm1)))]
@@ -186,33 +207,14 @@ simulatorRight adv ((m0, m1), (advs, i, o)) =
                 (Dist.certainly $ (msgErr, (advs, 2, o))))]
         (Dist.certainly $ (msgErr, (advs, 2, o)))
 
-simulatorRightIncorrect :: Party Msg (SWord8, SBool) -> Party Msg ((SWord8, SBool), SWord8, SBool)
-simulatorRightIncorrect adv ((m0, m1), (advs, i, o)) = 
-    symSwitch [
-        (i .== 0 &&& (m0 .== literal Ok), do
-            ((advm0, advm1), advs) <- adv (msgOk, (0, false))
-            symSwitch [
-                (advm0 .== literal Play, Dist.certainly $ (msgPlay advm1, (advs, 1, advm1)))]
-                (Dist.certainly $ (msgErr, (advs, 1, o)))),
-        (i .== 1 &&& (m0 .== literal Result), do
-            ((advm0, advm1), advs') <- adv ((msgOpened (o <+> m1)), advs) 
-            symSwitch [
-                ((advm0, advm1) .== msgOpen, do
-                    ((advm0, advm1), _) <- adv (msgOk, advs')
-                    symSwitch [
-                        ((advm0 .== literal Output), Dist.certainly $ (msgOutput advm1, (advs', 2, o)))]
-                        (Dist.certainly $ (msgErr, (advs, 2, o))))
-                ]
-                (Dist.certainly $ (msgErr, (advs, 2, o))))]
-        (Dist.certainly $ (msgErr, (advs, 2, o)))
-
 
 
 rpsSecure :: SBool -> SBool -> Symbolic SBool
 rpsSecure i i2 = do
     a <- genAdv 3
-    let d1 = (runReal 0 (0, false) a (honestPartyRightReal i2))
-        d2 = (runIdeal 0 0 (honestPartyLeftIdeal i) (honestPartyRightIdeal i2))
+    let adv = instNullState false a
+    let d1 = (runReal 0 (0, false) (honestPartyLeftReal i) adv)
+        d2 = (runIdeal 0 ((0, false), 0, false) (honestPartyLeftIdeal i) (simulatorRight adv))
     return $ seqDist d1 d2
 
 
