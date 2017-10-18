@@ -2,11 +2,24 @@ module Crypto.Dist where
 import Control.Monad
 import qualified Numeric.Probability.Distribution as D
 import Data.SBV
+import Data.SBV.Control
 import Crypto.Util
 
 type Probability = SReal
 type SDist a = SBV (D.T Probability a)
 type Dist a = D.T Probability a
+type ConcreteDist a = D.T AlgReal a
+
+
+
+getDist :: (Ord b) => (a -> b) -> Dist a -> Query (ConcreteDist b)
+getDist f d = do
+    let pairs = D.decons d
+    ps <- forM pairs (\(a, p) -> do 
+        pv <- getValue p;
+        return (f a, pv))
+    return $ D.norm $ D.fromFreqs ps
+
 
 sumProbs :: Mergeable a => (a -> SBool) -> [(a, SReal)] -> SReal
 sumProbs p [] = 0
@@ -32,8 +45,14 @@ instance Floating AlgReal where
 seqDist :: (EqSymbolic a, Enumerable a, Mergeable a) => Dist a -> Dist a -> SBool
 seqDist d1 d2 = foldl (\acc a -> acc &&& ((a .??= d1) .== (a .??= d2))) true enumerate
 
-ppDist :: Show a => Dist a -> String
-ppDist d = show $ D.decons d
+ppDist :: (Show p, Num p, Ord p, Ord a, Show a) => D.T p a -> String
+ppDist d = D.pretty show d
+
+ppDist' :: (Show p, Show a) => D.T p a -> String
+ppDist' d = go $ D.decons d
+    where
+        go [] = ""
+        go (p:ps) = (show p) ++ "\n" ++ (go ps)
 
 genSymDist :: Enumerable a => Symbolic (Dist a)
 genSymDist = do

@@ -24,6 +24,14 @@ instance Enumerable ProtMsg where
 type SProtMsg = SBV ProtMsg
 
 type Msg = (SProtMsg, SBool)
+type ConcreteMsg = (ProtMsg, Bool)
+concretizeMsg :: Msg -> ConcreteMsg
+concretizeMsg (m0, m1) =
+    case (unliteral m0, unliteral m1) of
+      (Just a, Just b) -> (a,b)
+      _ -> error "symbolic message"
+
+concretizeMsgPair p = (concretizeMsg (fst p), concretizeMsg (snd p))
 
 
 genAdv :: Integer -> Symbolic (Party Msg SWord8) 
@@ -166,11 +174,11 @@ runReal inita initb p1 p2 = do
 honestRealCorrect :: SBool -> SBool -> SBool
 honestRealCorrect i1 i2 = (((msgOutput (i1 <+> i2)), (msgOutput (i1 <+> i2))) .??= (runReal 0 (0, false) (honestPartyLeftReal i1) (honestPartyRightReal i2))) .== 1
     
-simulatorRight :: Party Msg (SWord8, SBool) -> Party Msg ((SWord8, SBool), SWord8, SBool)
+simulatorRight :: Party Msg SWord8 -> Party Msg (SWord8, SWord8, SBool)
 simulatorRight adv ((m0, m1), (advs, i, o)) = 
     symSwitch [
         (i .== 0 &&& (m0 .== literal Ok), do
-            ((advm0, advm1), advs') <- adv (msgOk, (0, false))
+            ((advm0, advm1), advs') <- adv (msgOk, 0)
             symSwitch [
                 (advm0 .== literal Play, Dist.certainly $ (msgPlay advm1, (advs', i + 1, advm1)))]
                 (Dist.certainly $ (msgErr, (advs', i + 1, o)))),
@@ -178,8 +186,8 @@ simulatorRight adv ((m0, m1), (advs, i, o)) =
             ((advm0, advm1), advs') <- adv ((msgOpened (o <+> m1)), advs) 
             symSwitch [
                 ((advm0, advm1) .== msgOpen, do
-                    ((advm0, advm1), _) <- adv (msgOk, advs')
-                    return $ ((advm0, advm1), (advs', i + 1, o)))
+                    ((m0, m1), _) <- adv (msgOk, advs')
+                    return $ ((m0, m1), (advs', i + 1, o)))
                     --symSwitch [
                     --    ((advm0 .== literal Output), Dist.certainly $ (msgOutput advm1, (advs', 2, o)))]
                     --    (Dist.certainly $ (msgErr, (advs, 2, o))))
@@ -187,36 +195,18 @@ simulatorRight adv ((m0, m1), (advs, i, o)) =
                 (Dist.certainly $ (msgErr, (advs', i + 1, o))))]
         (Dist.certainly $ (msgErr, (advs, i + 1, o)))
 
-simulatorRightIncorrect :: Party Msg (SWord8, SBool) -> Party Msg ((SWord8, SBool), SWord8, SBool)
-simulatorRightIncorrect adv ((m0, m1), (advs, i, o)) = 
-    symSwitch [
-        (i .== 0 &&& (m0 .== literal Ok), do
-            ((advm0, advm1), advs) <- adv (msgOk, (0, false))
-            return $ symSwitch [
-                (advm0 .== literal Play, (msgPlay advm1, (advs, 1, advm1)))]
-                ((msgErr, (advs, 1, o)))),
-        (i .== 1 &&& (m0 .== literal Result), do
-            ((advm0, advm1), advs') <- adv ((msgOpened (o <+> m1)), advs) 
-            symSwitch [
-                ((advm0, advm1) .== msgOpen, do
-                    ((advm0, advm1), _) <- adv (msgOk, advs')
-                    return $ symSwitch [
-                        ((advm0 .== literal Output), (msgOutput advm1, (advs', 2, o)))]
-                        ((msgErr, (advs, 2, o))))
-                ]
-                (Dist.certainly $ (msgErr, (advs, 2, o))))]
-        (Dist.certainly $ (msgErr, (advs, 2, o)))
-
-
-
-rpsSecure :: SBool -> SBool -> Symbolic SBool
-rpsSecure i i2 = do
+runRPSSim :: SBool -> SBool -> Symbolic (Dist (Msg, Msg), Dist (Msg, Msg))
+runRPSSim i i2 = do
     a <- genAdv 3
-    let adv = instNullState false a
-    let d1 = (runReal 0 (0, false) (honestPartyLeftReal i) adv)
-        d2 = (runIdeal 0 ((0, false), 0, false) (honestPartyLeftIdeal i) (simulatorRight adv))
-    return $ seqDist d1 d2
+    let d1 = (runReal 0 0 (honestPartyLeftReal i) a)
+        d2 = (runIdeal 0 (0, 0, false) (honestPartyLeftIdeal i) (simulatorRight a))
+    return (d1, d2)
 
+
+rpsSecure :: SBool -> SBool -> Symbolic (Dist (Msg, Msg), Dist (Msg, Msg), SBool)
+rpsSecure i1 i2 = do
+    (d1, d2) <- runRPSSim i1 i2
+    return $ (d1, d2, seqDist d1 d2)
 
                 
            

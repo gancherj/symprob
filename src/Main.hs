@@ -1,42 +1,26 @@
 module Main where
 import Control.Monad
 import Data.SBV
+import Data.SBV.Control
 import qualified Crypto.Prot as Prot
 import qualified Crypto.Dist as Dist
 import qualified Numeric.Probability.Distribution as Dist
 
-
-testDist :: (SBool -> Dist.Dist SBool) -> (SBool -> Dist.Dist SBool) -> Dist.Dist SBool
-testDist f g = do
-    x <- f false
-    x' <- f true
-    y <- g false
-    y' <- g true
-    return $ x .== y &&& x' .== y'
-
-
-
-tst :: Symbolic Dist.Probability
-tst = do
-    f <- (Dist.genReaction :: Symbolic (SBool -> Dist.Dist SBool))
-    g <- (Dist.genReaction :: Symbolic (SBool -> Dist.Dist SBool))
-
-    return $ true Dist..??= (testDist f g)
-    
-
-t :: Symbolic SBool
-t = do
-    out_dist <- Prot.runIdealCrupt2 false
-    let x = (Prot.msgOutput false, Prot.msgErr) Dist..??= out_dist
-        y = (\_ -> true) Dist..?? out_dist
-        z = (\((m0, m1), _) -> m0 .== literal Prot.Output ==> m1 .== true) Dist..?? out_dist
-    return $ z .== 1
-
-t2 :: Symbolic SBool
-t2 = do
-    a <- Prot.genAdv 2
-    return $ Prot.equalParties a (Prot.honestPartyRightIdeal true)
-
+queryProt :: Symbolic ()
+queryProt = do
+    (d1, d2, x) <- (Prot.rpsSecure false false)
+    constrain $ x .== false
+    query $ do
+        cs <- checkSat
+        case cs of
+          Unk -> io $ putStrLn $ "unk"
+          Unsat -> io $ putStrLn $ "unsat"
+          Sat -> do
+              xv <- getValue x
+              d1v <- Dist.getDist Prot.concretizeMsgPair d1
+              d2v <- Dist.getDist Prot.concretizeMsgPair d2
+              io $ putStrLn $ "d1: " ++ (Dist.ppDist d1v)
+              io $ putStrLn $ "d2: " ++ (Dist.ppDist d2v)
 
 
 main = do
@@ -48,13 +32,13 @@ main = do
     putStrLn . show =<< prove Prot.honestIdealCorrect
     putStrLn . show =<< prove Prot.honestRealCorrect
     -}
+    putStrLn "run:"
+    runSMT queryProt
 
-    putStrLn "prove:"
-    putStrLn . show =<< prove Prot.rpsSecure
 
-    putStrLn "sat:"
-    res <- sat t2
-    putStrLn $ show res
+    --putStrLn "sat:"
+    --res <- sat t2
+    --putStrLn $ show res
     {-
     putStrLn . show =<< prove (Dist.seqDist (Dist.certainly (false :: SBool)) (Dist.uniform [false, true]))
     -}
