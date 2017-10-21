@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 module Crypto.Prot where
 import Control.Monad
 import Data.SBV
@@ -7,10 +8,16 @@ import Crypto.Dist
 import Crypto.Util
 import qualified Data.Map.Strict as Map
 
+newtype StageID = Stage Int
+    deriving (Eq, Num, Ord, Show)
+
+instance Enumerable StageID where
+    enumerate = [0,1,2,3,4,5,6,7,8,9,10]
+
 
 type Party m s = (m,s) -> Dist (m,s)
 
-instNullState :: s -> Party m (Word8) -> Party m (Word8, s)
+instNullState :: s -> Party m (StageID) -> Party m (StageID, s)
 instNullState snil f = \(m,(s0, s1)) -> do
     (m', a) <- f (m, s0)
     return (m', (a + 1, snil))
@@ -23,16 +30,17 @@ instance Enumerable ProtMsg where
 
 type Msg = (ProtMsg, Bool)
 
-genAdv :: Integer -> Symbolic (Party Msg Word8)
+genAdv :: Integer -> Symbolic (Party Msg StageID)
 genAdv bound = do
     creactions <- (genReactions bound) :: Symbolic [Msg -> Dist Msg]
     return $ \(m,i) -> do
         let j' = min i (fromInteger (bound - 1))
-            (j :: Int) = fromInteger (toInteger j')
-        m' <- (creactions !! j) m 
-        return (m', i+1)
+        case j' of
+          Stage j -> do
+            m' <- (creactions !! j) m 
+            return (m', i+1)
 
-equalParties :: Party Msg Word8 -> Party Msg Word8 -> SBool
+equalParties :: Party Msg StageID -> Party Msg StageID -> SBool
 equalParties p1 p2 =
     foldl (\acc p -> acc &&& seqDist (p1 p) (p2 p)) true enumerate
 
@@ -71,21 +79,21 @@ msgOpened i = (Opened, i)
 
 bxor a b = if a == b then False else True
 
-honestPartyLeftIdeal :: Bool -> Party Msg Word8
+honestPartyLeftIdeal :: Bool -> Party Msg StageID
 honestPartyLeftIdeal inp ((m0, m1), i) =
     case (i, (m0, m1)) of
       (0, _) -> Dist.certainly $ (msgPlay inp, 1)
       (1, (Result, _)) -> Dist.certainly $ (msgOutput m1, 2)
       _ -> Dist.certainly $ (msgErr, i + 1)
 
-honestPartyRightIdeal :: Bool -> Party Msg Word8
+honestPartyRightIdeal :: Bool -> Party Msg StageID
 honestPartyRightIdeal inp ((m0, m1), i) =
     case (i, (m0, m1)) of
       (0, msgOk) -> Dist.certainly $ (msgPlay inp, 1)
       (1, (Result, _)) -> Dist.certainly $ (msgOutput m1, 2)
       _ -> Dist.certainly $ (msgErr, i + 1)
 
-idealFunc :: Party Msg (Word8, Bool, Bool)
+idealFunc :: Party Msg (StageID, Bool, Bool)
 idealFunc ((m0, m1), (i, p1, p2)) =
     case (i, (m0, m1)) of
       (0, (Play, _)) -> Dist.certainly $ (msgOk, (1, m1, p2))
@@ -122,7 +130,7 @@ honestIdealCorrect i1 i2 = (((msgOutput (i1 `bxor` i2)), (msgOutput (i1 `bxor` i
     B: output result
 -}
 
-honestPartyLeftReal :: Bool -> Party Msg Word8
+honestPartyLeftReal :: Bool -> Party Msg StageID
 honestPartyLeftReal inp ((m0, m1), i) =
     case (i, (m0, m1)) of
       (0, msgOk) -> Dist.certainly $ (msgPlay inp, 1)
@@ -130,7 +138,7 @@ honestPartyLeftReal inp ((m0, m1), i) =
       (2, (Opened, _)) -> Dist.certainly (msgOutput (inp `bxor` m1), 3)
       _ -> Dist.certainly (msgErr, i+1)
 
-honestPartyRightReal :: Bool -> Party Msg (Word8, Bool)
+honestPartyRightReal :: Bool -> Party Msg (StageID, Bool)
 honestPartyRightReal inp ((m0, m1), (i, o)) =
     case (i, (m0, m1)) of
       (0, msgOk) -> Dist.certainly $ (msgPlay inp, (1, o))
@@ -138,7 +146,7 @@ honestPartyRightReal inp ((m0, m1), (i, o)) =
       (2, msgOk) -> Dist.certainly $ (msgOutput (inp `bxor` o), (4, o))
       _ -> Dist.certainly (msgErr, (i+1, false))
 
-fComm :: Party Msg (Word8, Bool)
+fComm :: Party Msg (StageID, Bool)
 fComm ((m0, m1), (i,o)) =
     case (i, (m0, m1)) of
       (0, (Play, _)) -> Dist.certainly (msgOk, (1, m1))
@@ -162,7 +170,7 @@ runReal inita initb p1 p2 = do
 honestRealCorrect :: Bool -> Bool -> SBool
 honestRealCorrect i1 i2 = (((msgOutput (i1 `bxor` i2)), (msgOutput (i1 `bxor` i2))) ??= (runReal 0 (0, False) (honestPartyLeftReal i1) (honestPartyRightReal i2))) .== 1
      
-simulatorRight :: Party Msg Word8 -> Party Msg (Word8, Word8, Bool)
+simulatorRight :: Party Msg StageID -> Party Msg (StageID, StageID, Bool)
 simulatorRight adv ((m0, m1), (advs, i, o)) = 
     case (i, (m0, m1)) of
       (0, (Ok, _)) -> do
@@ -172,17 +180,20 @@ simulatorRight adv ((m0, m1), (advs, i, o)) =
             _ -> Dist.certainly (msgErr, (advs', i+1, o))
       (1, (Result, _)) -> do
           ((advm0, advm1), advs') <- adv (msgOpened (o `bxor` m1), advs)
-          if (advm0, advm1) == msgOpen then
+              {-if (advm0, advm1) == msgOpen then
              do
                 ((m0, m1), advs'') <- adv (msgOk, advs')
                 return ((m0,m1), (advs'', i+1, o))
-          else Dist.certainly (msgErr, (advs', i+1, o))
+          else Dist.certainly (msgErr, (advs', i+1, o))-}
+          ((m0, m1), advs'') <- adv (msgOk, advs')
+          return ((m0,m1), (advs'', i+1, o))
+
 
       _ -> Dist.certainly (msgErr, (advs, i+1, o))
                 
 
 
-runRPSSim :: Bool -> Bool -> Symbolic (Dist (Msg, Msg), Dist (Msg, Msg), Party Msg Word8)
+runRPSSim :: Bool -> Bool -> Symbolic (Dist (Msg, Msg), Dist (Msg, Msg), Party Msg StageID)
 runRPSSim i i2 = do
     a <- genAdv 3
     let d1 = (runReal 0 0 (honestPartyLeftReal i) a)
@@ -190,7 +201,7 @@ runRPSSim i i2 = do
     return (d1, d2, a)
 
 
-rpsSecure :: Bool -> Bool -> Symbolic (Dist (Msg, Msg), Dist (Msg, Msg), SBool, Party Msg Word8)
+rpsSecure :: Bool -> Bool -> Symbolic (Dist (Msg, Msg), Dist (Msg, Msg), SBool, Party Msg StageID)
 rpsSecure i1 i2 = do
     (d1, d2, a) <- runRPSSim i1 i2
     return $ (d1, d2, seqDist d1 d2, a)

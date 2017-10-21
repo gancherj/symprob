@@ -12,8 +12,8 @@ queryProt :: Symbolic ()
 queryProt = do
     (d1, d2, x, a) <- (Prot.rpsSecure false false)
     -- constrain $ ((\(x1,x2) -> (fst x1) .== literal Prot.Err) Dist..?? d1) .== ((\(x1,x2) -> (fst x1) .== literal Prot.Err) Dist..?? d2)
-    -- constrain $ ((\(x1,x2) -> (fst x1) .== literal Prot.Err) Dist..?? d1) .== 1
-    constrain $ x .== true
+    constrain $ ((\(x1,x2) -> x1 == Prot.msgErr) Dist.?? d2) .== 1
+    -- constrain $ x .== false
     query $ do
         cs <- checkSat
         case cs of
@@ -21,15 +21,14 @@ queryProt = do
           Unsat -> io $ putStrLn $ "unsat"
           Sat -> do
               io $ putStrLn $ "sat"
+              av <- Dist.getReact a
               xv <- getValue x
               d1v <- Dist.getDist d1
               d2v <- Dist.getDist d2
-              ads <- Dist.getDist (a (Prot.msgOk, 0))
               io $ putStrLn $ "d1: " ++ (Dist.ppDist d1v)
               io $ putStrLn $ "d2: " ++ (Dist.ppDist d2v)
               io $ putStrLn $ "x: " ++ (show xv)
-              io $ putStrLn $ "x: " ++ (Dist.ppDist ads)
-              -- io $ putStrLn $ "a: " ++ (unwords (map (\m -> (Dist.ppDist (av m))) enumerate))
+              io $ putStrLn $ "a: " ++ (unwords (map (\m -> "m: " ++ (show m) ++ ", d: " ++ (Dist.ppDist (av m))) enumerate))
               return ()
 
    
@@ -44,8 +43,9 @@ main = do
     putStrLn . show =<< prove Prot.honestRealCorrect
     -}
     putStrLn "run:"
-    runSMTWith z3{verbose=True} queryProt
+    runSMTWith cvc4 queryProt
     putStrLn . show =<< prove (symLift2 Prot.honestIdealCorrect)
+    putStrLn . show =<< isVacuous (symLift2 Prot.honestIdealCorrect)
     putStrLn . show =<< prove (symLift2 Prot.honestRealCorrect)
 
 

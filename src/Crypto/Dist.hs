@@ -3,6 +3,7 @@ import Control.Monad
 import qualified Numeric.Probability.Distribution as D
 import Data.SBV
 import Data.SBV.Control
+import qualified Data.Map.Strict as Map
 import Crypto.Util
 
 type Probability = SReal
@@ -11,17 +12,22 @@ type Dist a = D.T Probability a
 type ConcreteDist a = D.T AlgReal a
 
 
-
-getDistWith :: (Ord b) => (a -> b) -> Dist a -> Query (ConcreteDist b)
-getDistWith f d = do
-    let pairs = D.decons d
-    ps <- forM pairs (\(a, p) -> do 
-        pv <- getValue p;
-        return (f a, pv))
-    return $ D.norm $ D.fromFreqs ps
-
 getDist :: (Ord a) => Dist a -> Query (ConcreteDist a)
-getDist = getDistWith id
+getDist d = do
+    let pairs = D.decons d
+    ps <- forM pairs (\(a,p) -> do
+        pv <- getValue p
+        return (a, pv))
+    return $ D.certainly (fst (head pairs))
+
+getReact :: (Ord a, Enumerable a, Ord b) => (a -> Dist b) -> Query (a -> ConcreteDist b)
+getReact f = do
+    pairs <- forM enumerate (\a -> do {d <- getDist (f a); return (a, d)})
+    let m = Map.fromList pairs
+    return $ \a -> m Map.! a
+
+
+
 
 
 (??=) :: (Eq a) => a -> Dist a -> Probability
