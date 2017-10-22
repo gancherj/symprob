@@ -12,8 +12,8 @@ queryProt :: Symbolic ()
 queryProt = do
     (d1, d2, x, a) <- (Prot.rpsSecure false false)
     -- constrain $ ((\(x1,x2) -> (fst x1) .== literal Prot.Err) Dist..?? d1) .== ((\(x1,x2) -> (fst x1) .== literal Prot.Err) Dist..?? d2)
-    constrain $ ((\(x1,x2) -> x1 == Prot.msgErr) Dist.?? d2) .== 1
-    -- constrain $ x .== false
+    -- constrain $ ((\(x1,x2) -> x1 == Prot.msgErr) Dist.?? d2) .== 1
+    constrain $ x .== false
     query $ do
         cs <- checkSat
         case cs of
@@ -28,7 +28,8 @@ queryProt = do
               io $ putStrLn $ "d1: " ++ (Dist.ppDist d1v)
               io $ putStrLn $ "d2: " ++ (Dist.ppDist d2v)
               io $ putStrLn $ "x: " ++ (show xv)
-              io $ putStrLn $ "a: " ++ (unwords (map (\m -> "m: " ++ (show m) ++ ", d: " ++ (Dist.ppDist (av m))) enumerate))
+              io $ Dist.ppReact av
+
               return ()
 
    
@@ -43,7 +44,7 @@ main = do
     putStrLn . show =<< prove Prot.honestRealCorrect
     -}
     putStrLn "run:"
-    runSMTWith cvc4 queryProt
+    runSMTWith z3 queryProt
     putStrLn . show =<< prove (symLift2 Prot.honestIdealCorrect)
     putStrLn . show =<< isVacuous (symLift2 Prot.honestIdealCorrect)
     putStrLn . show =<< prove (symLift2 Prot.honestRealCorrect)

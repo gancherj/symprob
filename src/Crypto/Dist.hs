@@ -18,7 +18,7 @@ getDist d = do
     ps <- forM pairs (\(a,p) -> do
         pv <- getValue p
         return (a, pv))
-    return $ D.certainly (fst (head pairs))
+    return $ D.norm $ D.fromFreqs ps
 
 getReact :: (Ord a, Enumerable a, Ord b) => (a -> Dist b) -> Query (a -> ConcreteDist b)
 getReact f = do
@@ -26,6 +26,12 @@ getReact f = do
     let m = Map.fromList pairs
     return $ \a -> m Map.! a
 
+ppReact :: (Enumerable a, Enumerable b, Show a, Show b, Ord b) => (a -> ConcreteDist b) -> IO ()
+ppReact f = do
+    forM_ enumerate (\a -> do
+        putStrLn $ (show a) ++ " -> \n " ++ (ppDist (f a))
+        putStrLn $ "\n \n"
+                    )
 
 
 
