@@ -26,8 +26,6 @@ queryProt = do
               av <- Dist.getReact a
               d1v <- Dist.getDist d1
               d2v <- Dist.getDist d2
-              io $ putStrLn $ Dist.ppDist d1v
-              io $ putStrLn $ Dist.ppDist d2v
               io $ do
                       (m1,m2, ms) <- Rand.run $ Rand.pick $ Prot.runRealWithAdv False av
                       (u1,u2, us) <- Rand.run $ Rand.pick $ Prot.runIdealWithAdv False av

@@ -53,9 +53,10 @@ instance Enumerable Msg where
    A: activated, send play b to F
    F: send ok to B
    B: send play b' to F
-   F: send result (b xor b') to A
-   A: output result
-   F: send result to B
+   F: send result (b xor b') to B
+   B: output Ok or Err to A
+   F: send result to A, unless err, then send err to a
+   A : output result
    B : output result
 -}
 
@@ -67,19 +68,20 @@ honestPartyLeftIdeal inp (m, i) =
       (1, (Result m1)) -> Dist.certainly $ (Output m1, 2)
       _ -> Dist.certainly $ (Err, i + 1)
 
-honestPartyRightIdeal :: Num p => Bool -> Party p Msg StageID
-honestPartyRightIdeal inp (m, i) =
+honestPartyRightIdeal :: Num p => Bool -> Party p Msg (StageID, Bool)
+honestPartyRightIdeal inp (m, (i, s)) =
     case (i, m) of
-      (0, (Ok)) -> Dist.certainly $ (Play inp, 1)
-      (1, (Result m1)) -> Dist.certainly $ (Output m1, 2)
-      _ -> Dist.certainly $ (Err, i + 1)
+      (0, (Ok)) -> Dist.certainly $ (Play inp, (1, s))
+      (1, Result m1) -> return (Ok, (2, m1))
+      (2, Ok) -> Dist.certainly $ (Output s, (2, s))
+      _ -> Dist.certainly $ (Err, (i + 1, s))
 
 idealFunc :: Num p => Party p Msg (StageID, Bool, Bool)
 idealFunc (m, (i, p1, p2)) =
     case (i, m) of
       (0, (Play m1)) -> Dist.certainly $ (Ok, (1, m1, p2))
       (1, (Play m1)) -> Dist.certainly $ (Result (m1 <+> p1), (2, p1, m1))
-      (2, (Output _)) -> Dist.certainly $ (Result (p1 <+> p2), (3, p1, p2))
+      (2, Ok) -> Dist.certainly $ (Result (p1 <+> p2), (3, p1, p2))
       _ -> Dist.certainly (Err, (i+1, p1, p2))
 
 runIdeal :: Num p => a -> b -> Party p Msg a -> Party p Msg b -> Dist.T p (Msg, Msg)
@@ -88,15 +90,16 @@ runIdeal a b p1 p2 = do
     (m,sf1) <- idealFunc (m, (0, False, False))
     (m, s21) <- p2 (m, b)
     (m, sf2) <- idealFunc (m, sf1)
-    (out1, s12) <- p1 (m, s11)
-    (m, _) <- idealFunc (out1, sf2)
-    (out2, _) <- p2 (m, s21)
+    (m, s22) <- p2 (m, s21)
+    (m, _) <- idealFunc (m, sf2)
+    (out1, _) <- p1 (m, s11)
+    (out2, _) <- p2 (Ok, s22)
     return (out1, out2)
 
 
 
 honestIdealCorrect :: Bool -> Bool -> SBool
-honestIdealCorrect i1 i2 = (((Output (i1 <+> i2)), (Output (i1 <+> i2))) ??= (runIdeal 0 0 ((honestPartyLeftIdeal i1) :: SymParty Msg StageID) (honestPartyRightIdeal i2))) .== 1
+honestIdealCorrect i1 i2 = (((Output (i1 <+> i2)), (Output (i1 <+> i2))) ??= (runIdeal 0 (0, false) ((honestPartyLeftIdeal i1) :: SymParty Msg StageID) (honestPartyRightIdeal i2))) .== 1
 
 
 {-
@@ -150,16 +153,17 @@ runReal inita initb p1 p2 = do
     (out2, _) <- p2 (Ok, sb2)
     return (out1, out2)
 
-runIdealFullTrace :: (Show b, Num p) => a -> b -> Party p Msg a -> Party p Msg b -> Dist.T p (Msg, Msg, [(String, Msg)])
+runIdealFullTrace :: Num p => a -> b -> Party p Msg a -> Party p Msg b -> Dist.T p (Msg, Msg, [(String,Msg)])
 runIdealFullTrace a b p1 p2 = do
     (m1,s11) <- p1 (Ok, a)
     (m2,sf1) <- idealFunc (m1, (0, False, False))
     (m3, s21) <- p2 (m2, b)
     (m4, sf2) <- idealFunc (m3, sf1)
-    (out1, s12) <- p1 (m4, s11)
-    (m5, _) <- idealFunc (out1, sf2)
-    (out2, _) <- p2 (m5, s21)
-    return (out1, out2, [("A", m1), ("F", m2), ("B(" ++ (show b) ++ "," ++ (show m2)++")",m3), ("F",m4), ("A",out1), ("F",m5), ("B(" ++ (show s21) ++ "," ++ (show m5) ++")",out2)])
+    (m5, s22) <- p2 (m4, s21)
+    (m6, _) <- idealFunc (m5, sf2)
+    (out1, _) <- p1 (m6, s11)
+    (out2, _) <- p2 (Ok, s22)
+    return (out1, out2, [("A", m1),("F", m2),("B", m3),("F", m4),("B",m5),("F",m6),("A",out1),("B",out2)])
 
 runRealFullTrace :: (Show b, Num p) => a -> b ->  Party p Msg a -> Party p Msg b -> Dist.T p (Msg, Msg, [(String, Msg)])
 runRealFullTrace inita initb p1 p2 = do
@@ -178,12 +182,23 @@ runRealFullTrace inita initb p1 p2 = do
 runRealWithAdv :: Bool -> ConcreteParty Msg StageID -> ConcreteDist (Msg, Msg, [(String,Msg)])
 runRealWithAdv i a = runRealFullTrace 0 0 (honestPartyLeftReal i) a
 
-runIdealWithAdv :: Bool -> ConcreteParty Msg StageID -> ConcreteDist (Msg, Msg, [(String,Msg)])
+runIdealWithAdv :: Bool -> ConcreteParty Msg StageID -> ConcreteDist (Msg, Msg, [(String, Msg)])
 runIdealWithAdv i a = runIdealFullTrace 0 (0, 0, false) (honestPartyLeftIdeal i) (simulatorRight a)
 
 honestRealCorrect :: Bool -> Bool -> SBool
 honestRealCorrect i1 i2 = (((Output (i1 <+> i2)), (Output (i1 <+> i2))) ??= (runReal 0 (0, False) ((honestPartyLeftReal i1) :: SymParty Msg StageID) (honestPartyRightReal i2))) .== 1
      
+{-
+   A: activated, send play b to F
+   F: send ok to B
+   B: send play b' to F
+   F: send result (b xor b') to B
+   B: output Ok or Err to A
+   F: send result to A, unless err, then send err to a
+   A : output result
+   B : output result
+-}
+
 simulatorRight :: Num p => Party p Msg StageID -> Party p Msg (StageID, StageID, Bool)
 simulatorRight adv (m, (advs, i, o)) = 
     case (i, m) of
@@ -194,7 +209,12 @@ simulatorRight adv (m, (advs, i, o)) =
             _ -> Dist.certainly (Err, (advs', i+1, o))
       (1, (Result b)) -> do
           (m', advs') <- adv (Opened (o <+> b), advs)
-          (m'', advs'') <- adv (Ok, advs')
+          return (m', (advs', i+1, o))
+          --case m' of
+          --  Open -> Dist.certainly (Ok, (advs', i+1, o))
+          --  _ -> Dist.certainly (Err, (advs', i+1, o))
+      (2, Ok) -> do
+          (m'', advs'') <- adv (Ok, advs)
           return (m'', (advs'', i+1, o))
       _ -> Dist.certainly (Err, (advs, i+1, o))
                 
