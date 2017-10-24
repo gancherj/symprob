@@ -89,7 +89,7 @@ genDetReaction = do
             go x ((y, d) : ps) = if x == y then d else go x ps
 
 genDetReactions :: (Eq a, Enumerable a, Enumerable b) => Integer -> Symbolic [a -> SymDist b]
-genDetReactions i = mapM (\_ -> genDetReaction) [1..i]
+genDetReactions i = mapM (\_ -> genReaction) [1..i]
 
 instance Mergeable a => Mergeable (D.T SReal a) where
     symbolicMerge w s (D.Cons a) (D.Cons b) = D.Cons $ symbolicMerge w s a b

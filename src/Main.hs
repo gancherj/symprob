@@ -41,7 +41,16 @@ queryProt = do
 
               return ()
 
-   
+rpsSecureWith :: Bool -> Bool -> Symbolic SBool
+rpsSecureWith i1 i2 = do
+    (_, _, x, a) <- (Prot.rpsSecure i1 i2)
+    return x
+
+rpsSecure :: Symbolic SBool
+rpsSecure = do
+    let bs = enumerate
+    ys <- forM bs (\(b1,b2) -> rpsSecureWith b1 b2)
+    return $ bAnd ys
 
 main = do
     {-putStrLn . show =<< prove ( do
@@ -54,7 +63,8 @@ main = do
     -}
     
     putStrLn "run:"
-    runSMTWith z3 queryProt
+    putStrLn . show =<< prove (rpsSecure)
+    --runSMTWith z3 queryProt
     putStrLn . show =<< prove (symLift2 Prot.honestIdealCorrect)
     putStrLn . show =<< isVacuous (symLift2 Prot.honestIdealCorrect)
     putStrLn . show =<< prove (symLift2 Prot.honestRealCorrect)
