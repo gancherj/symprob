@@ -132,19 +132,19 @@ honestPartyRightReal inp (m, (i, o)) =
       (2, (Ok)) -> Dist.certainly $ (Output (inp <+> o), (4, o))
       _ -> Dist.certainly (Err, (i+1, false))
 
-fComm :: Num p => Party p Msg (StageID, Bool)
+fComm :: Num p => Party p Msg (StageID, Maybe Bool)
 fComm (m, (i,o)) =
     case (i, m) of
-      (0, (Play m1)) -> Dist.certainly (Ok, (1, m1))
-      (1, (Open)) -> Dist.certainly (Opened o, (2, o))
+      (0, (Play m1)) -> Dist.certainly (Ok, (1, Just m1))
+      (1, (Open)) | Just b <- o -> Dist.certainly (Opened b, (2, o))
       _ -> Dist.certainly (Err, (i+1, o))
 
 runReal :: Num p => a -> b ->  Party p Msg a -> Party p Msg b -> Dist.T p (Msg, Msg)
 runReal inita initb p1 p2 = do
     (m, sa1) <- p1 (Ok, inita)
-    (m, sf11) <- fComm (m, (0, False))
+    (m, sf11) <- fComm (m, (0, Nothing))
     (m, sb1) <- p2 (m, initb)
-    (m, sf21) <- fComm (m, (0, False))
+    (m, sf21) <- fComm (m, (0, Nothing))
     (m, sa2) <- p1 (m, sa1)
     (m, _) <- fComm (m, sf11)
     (m, sb2) <- p2 (m, sb1)
@@ -153,7 +153,7 @@ runReal inita initb p1 p2 = do
     (out2, _) <- p2 (Ok, sb2)
     return (out1, out2)
 
-runIdealFullTrace :: Num p => a -> b -> Party p Msg a -> Party p Msg b -> Dist.T p (Msg, Msg, [(String,Msg)])
+runIdealFullTrace :: (Show b,Num p) => a -> b -> Party p Msg a -> Party p Msg b -> Dist.T p (Msg, Msg, [(String,Msg)])
 runIdealFullTrace a b p1 p2 = do
     (m1,s11) <- p1 (Ok, a)
     (m2,sf1) <- idealFunc (m1, (0, False, False))
@@ -163,21 +163,21 @@ runIdealFullTrace a b p1 p2 = do
     (m6, _) <- idealFunc (m5, sf2)
     (out1, _) <- p1 (m6, s11)
     (out2, _) <- p2 (Ok, s22)
-    return (out1, out2, [("A", m1),("F", m2),("B", m3),("F", m4),("B",m5),("F",m6),("A",out1),("B",out2)])
+    return (out1, out2, [("A", m1),("F", m2),("B("++(show b)++")", m3),("F", m4),("B("++(show s21)++")",m5),("F",m6),("A",out1),("B(" ++ (show s22) ++")",out2)])
 
 runRealFullTrace :: (Show b, Num p) => a -> b ->  Party p Msg a -> Party p Msg b -> Dist.T p (Msg, Msg, [(String, Msg)])
 runRealFullTrace inita initb p1 p2 = do
     (m1, sa1) <- p1 (Ok, inita)
-    (m2, sf11) <- fComm (m1, (0, False))
+    (m2, sf11) <- fComm (m1, (0, Nothing))
     (m3, sb1) <- p2 (m2, initb)
-    (m4, sf21) <- fComm (m3, (0, False))
+    (m4, sf21) <- fComm (m3, (0, Nothing))
     (m5, sa2) <- p1 (m4, sa1)
     (m6, _) <- fComm (m5, sf11)
     (m7, sb2) <- p2 (m6, sb1)
     (m8, _) <- fComm (m7, sf21)
     (out1, _) <- p1 (m8, sa2)
     (out2, _) <- p2 (Ok, sb2)
-    return (out1, out2, [("A", m1),("fc1", m2),("B(" ++ (show initb) ++ "," ++ (show m2) ++ ")", m3),("fc2", m4),("A",m5),("fc1",m6),("B(" ++ (show sb1) ++ ", " ++ (show m6)++")",m7),("fc2",m8),("A",out1),("B(" ++ (show sb2) ++ "," ++ (show Ok)++")",out2)])
+    return (out1, out2, [("A", m1),("fc1", m2),("B(" ++ (show initb) ++ ")", m3),("fc2", m4),("A",m5),("fc1",m6),("B(" ++ (show sb1) ++ ")",m7),("fc2",m8),("A",out1),("B(" ++ (show sb2),out2)])
 
 runRealWithAdv :: Bool -> ConcreteParty Msg StageID -> ConcreteDist (Msg, Msg, [(String,Msg)])
 runRealWithAdv i a = runRealFullTrace 0 0 (honestPartyLeftReal i) a
@@ -208,13 +208,12 @@ simulatorRight adv (m, (advs, i, o)) =
             Play advm1 -> Dist.certainly (Play advm1, (advs', i+1, advm1))
             _ -> Dist.certainly (Err, (advs', i+1, o))
       (1, (Result b)) -> do
-          (m', advs') <- adv (Opened (o <+> b), advs)
-          return (m', (advs', i+1, o))
-          --case m' of
-          --  Open -> Dist.certainly (Ok, (advs', i+1, o))
-          --  _ -> Dist.certainly (Err, (advs', i+1, o))
+          (m', advs') <- adv (Opened (o <+> b), i)
+          case m' of
+            Open -> Dist.certainly (Ok, (advs', i+1, o))
+            _ -> Dist.certainly (Err, (advs', i+1, o))
       (2, Ok) -> do
-          (m'', advs'') <- adv (Ok, advs)
+          (m'', advs'') <- adv (Ok, i)
           return (m'', (advs'', i+1, o))
       _ -> Dist.certainly (Err, (advs, i+1, o))
                 
