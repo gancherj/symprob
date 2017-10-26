@@ -24,6 +24,7 @@ getReact f = do
     let m = Map.fromList pairs
     return $ \a -> m Map.! a
 
+
 ppReact :: (Enumerable a, Enumerable b, Show a, Show b, Ord b) => (a -> ConcreteDist b) -> String
 ppReact f = do
     foldl (\acc a -> acc ++ "\n" ++ (show a) ++ " -> \n " ++ (ppDist (f a)) ++ "\n") "" enumerate

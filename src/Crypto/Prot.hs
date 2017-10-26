@@ -218,18 +218,35 @@ simulatorRight adv (m, (advs, i, o)) =
       _ -> Dist.certainly (Err, (advs, i+1, o))
                 
 
+simulatorRight2 :: Num p => Party p Msg StageID -> Party p Msg (StageID, Bool)
+simulatorRight2 adv (m, (i, o)) = 
+    case (i, m) of
+      (0, Ok) -> do
+          (advm, _) <- adv (Ok, 0)
+          case advm  of
+            Play advm1 -> Dist.certainly (Play advm1, (i+1, advm1))
+            _ -> Dist.certainly (Err, (i+1, o))
+      (1, (Result b)) -> do
+          (m', _) <- adv (Opened (o <+> b), i)
+          case m' of
+            Open -> Dist.certainly (Ok, (i+1, o))
+            _ -> Dist.certainly (Err, (i+1, o))
+      (2, Ok) -> do
+          (m'', _) <- adv (Ok, i)
+          return (m'', (i+1, o))
+      _ -> Dist.certainly (Err, (i+1, o))
 
-runRPSSim :: Bool -> Bool -> Symbolic (SymDist (Msg, Msg), SymDist (Msg, Msg), SymParty Msg StageID)
-runRPSSim i i2 = do
-    a <- genDetAdv 3
+runRPSSim :: Bool -> Symbolic (SymDist (Msg, Msg), SymDist (Msg, Msg), SymParty Msg StageID)
+runRPSSim i = do
+    a <- genDetAdv 4
     let d1 = (runReal 0 0 (honestPartyLeftReal i) a)
-        d2 = (runIdeal 0 (0, 0, false) (honestPartyLeftIdeal i) (simulatorRight a))
+        d2 = (runIdeal 0 (0, false) (honestPartyLeftIdeal i) (simulatorRight2 a))
     return (d1, d2, a)
 
 
-rpsSecure :: Bool -> Bool -> Symbolic (SymDist (Msg, Msg), SymDist (Msg, Msg), SBool, SymParty Msg StageID)
-rpsSecure i1 i2 = do
-    (d1, d2, a) <- runRPSSim i1 i2
+rpsSecure :: Bool -> Symbolic (SymDist (Msg, Msg), SymDist (Msg, Msg), SBool, SymParty Msg StageID)
+rpsSecure i1 = do
+    (d1, d2, a) <- runRPSSim i1 
     return $ (d1, d2, seqDist d1 d2, a)
 
            
