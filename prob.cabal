@@ -22,8 +22,9 @@ executable prob
                        free,
                        containers,
                        probability,
-                       mtl
+                       mtl,
+                       lens
 
-  other-modules:       Crypto.Dist, Crypto.Prot, Crypto.Util
+  other-modules:       Crypto.Dist, Crypto.Util, Crypto.Party
 
   default-extensions: GADTs, DeriveFunctor, ScopedTypeVariables, TemplateHaskell, StandaloneDeriving, DeriveDataTypeable, FlexibleInstances, MultiParamTypeClasses
