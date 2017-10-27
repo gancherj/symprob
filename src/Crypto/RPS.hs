@@ -12,7 +12,7 @@ import Crypto.Party
 
 
 newtype StageID = Stage Int
-    deriving (Eq, Num, Ord, Show)
+    deriving (Eq, Num, Ord, Show, Real, Enum, Integral)
 
 data Msg = Play Bool | Open | Ok | Result Bool | Output Bool | Err | Opened Bool
     deriving (Show, Ord, Eq)
@@ -133,17 +133,6 @@ runReal (sa, a) (sb, b) =
 runHonestReal :: Num p => Bool -> Bool -> Dist.T p (Config p Msg)
 runHonestReal i1 i2 = runReal (0, honestPartyLeftReal i1) ((0, Nothing), (honestPartyRightReal i2))
 
-genAdv :: Integer -> Symbolic (Msg -> React SReal Msg StageID)
-genAdv bound = do
-    creactions <- (genDetReactions bound) :: Symbolic [Msg -> SymDist Msg]
-    return $ \m -> do
-        i <- get
-        put $ i + 1
-        let j' = min i (fromInteger (bound - 1))
-        case j' of
-          Stage j -> do
-              m' <- lift $ (creactions !! j) m
-              return m'
 
 simulatorRight :: Num p => (Msg -> React p Msg StageID) -> (Msg -> React p Msg (StageID, Bool))
 simulatorRight adv m = do
